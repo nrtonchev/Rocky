@@ -1,10 +1,13 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
 using Rocky.Data;
 using Rocky.Models;
 using Rocky.Models.ViewModels;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -13,10 +16,12 @@ namespace Rocky.Controllers
     public class ProductController : Controller
     {
         private readonly ApplicationDbContext _db;
+        private readonly IWebHostEnvironment _webHostEnvironment;
 
-        public ProductController(ApplicationDbContext db)
+        public ProductController(ApplicationDbContext db, IWebHostEnvironment webHostEnvironment)
         {
             _db = db;
+            _webHostEnvironment = webHostEnvironment;
         }
 
         public IActionResult Index()
@@ -34,16 +39,6 @@ namespace Rocky.Controllers
         //Get for upsert
         public IActionResult Upsert(int? id)
         {
-            //IEnumerable<SelectListItem> CategoryDropdown = _db.Categories.Select(x => new SelectListItem
-            //{
-            //    Text = x.Name,
-            //    Value = x.Id.ToString()
-            //});
-
-            //ViewBag.CategoryDropdown = CategoryDropdown;
-
-            //Product product = new Product();
-
             ProductViewModel productVM = new ProductViewModel()
             {
                 Product = new Product(),
@@ -68,7 +63,7 @@ namespace Rocky.Controllers
                     return NotFound();
                 }
 
-                return View(productVM.Product);
+                return View(productVM);
             }
 
         }
@@ -76,16 +71,74 @@ namespace Rocky.Controllers
         //Post for upsert
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public IActionResult UpsertPost(Product obj)
+        public IActionResult Upsert(ProductViewModel productVM)
         {
             if (ModelState.IsValid)
             {
-                _db.Products.Add(obj);
+                var files = HttpContext.Request.Form.Files;
+                string webRootPath = _webHostEnvironment.WebRootPath;
+
+                if (productVM.Product.Id == 0)
+                {
+                    //creating
+                    string upload = webRootPath + webConstants.ImagePath;
+                    string fileName = Guid.NewGuid().ToString();
+                    string extention = Path.GetExtension(files[0].FileName);
+
+                    using (var fileStream = new FileStream(Path.Combine(upload, fileName + extention), FileMode.Create))
+                    {
+                        files[0].CopyTo(fileStream);
+                    }
+
+                    productVM.Product.Image = fileName + extention;
+                     
+                    _db.Products.Add(productVM.Product);
+                }
+                else
+                {
+                    //updating
+                    var objFromDb = _db.Products.AsNoTracking().FirstOrDefault(x => x.Id == productVM.Product.Id);
+
+                    if (files.Count > 0)
+                    {
+                        string upload = webRootPath + webConstants.ImagePath;
+                        string fileName = Guid.NewGuid().ToString();
+                        string extention = Path.GetExtension(files[0].FileName);
+
+                        var oldFile = Path.Combine(upload, objFromDb.Image);
+
+                        if (System.IO.File.Exists(oldFile))
+                        {
+                            System.IO.File.Delete(oldFile);
+                        }
+
+                        using (var fileStream = new FileStream(Path.Combine(upload, fileName + extention), FileMode.Create))
+                        {
+                            files[0].CopyTo(fileStream);
+                        }
+
+                        productVM.Product.Image = fileName + extention;
+                    }
+
+                    else
+                    {
+                        productVM.Product.Image = objFromDb.Image;
+                    }
+
+                    _db.Products.Update(productVM.Product);
+                }
+
                 _db.SaveChanges();
                 return RedirectToAction("Index");
             }
 
-            return View(obj);
+            productVM.CategorySelectList = _db.Categories.Select(x => new SelectListItem
+            {
+                Text = x.Name,
+                Value = x.Id.ToString()
+            });
+
+            return View(productVM);
         }
 
         //Get for Delete
@@ -96,26 +149,34 @@ namespace Rocky.Controllers
                 return NotFound();
             }
 
-            Product obj = _db.Products.Find(id);
+            Product product = _db.Products.Include(u => u.Category).FirstOrDefault(u => u.Id == id);
+
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            return View(product);
+        }
+
+        //Post for Delete
+        [HttpPost,ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public IActionResult DeletePost(int? id)
+        {
+            var obj = _db.Products.Find(id);
 
             if (obj == null)
             {
                 return NotFound();
             }
 
-            return View(obj);
-        }
+            string upload = _webHostEnvironment.WebRootPath + webConstants.ImagePath;
+            var oldFile = Path.Combine(upload, obj.Image);
 
-        //Post for Delete
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public IActionResult DeletePost(int? id)
-        {
-            Product obj = _db.Products.Find(id);
-
-            if (obj == null)
+            if (System.IO.File.Exists(oldFile))
             {
-                return View(obj);
+                System.IO.File.Delete(oldFile);
             }
 
             _db.Products.Remove(obj);
