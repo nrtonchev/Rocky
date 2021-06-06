@@ -28,6 +28,14 @@
                 </div>
                 <div class="form-group row">
                     <div class="col-4">
+                        <label asp-for="ShortDesc"></label>
+                    </div>
+                    <div class="col-8">
+                        <textarea asp-for="ShortDesc" disabled class="form-control"></textarea>
+                    </div>
+                </div>
+                <div class="form-group row">
+                    <div class="col-4">
                         <label asp-for="Description"></label>
                     </div>
                     <div class="col-8">
@@ -40,6 +48,14 @@
                     </div>
                     <div class="col-8">
                         <input asp-for="Category.Name" disabled class="form-control" />
+                    </div>
+                </div>
+                <div class="form-group row">
+                    <div class="col-4">
+                        <label asp-for="ApplicationTypeId"></label>
+                    </div>
+                    <div class="col-8">
+                        <input asp-for="ApplicationType.Name" disabled class="form-control" />
                     </div>
                 </div>
                 <div class="form-group row">
