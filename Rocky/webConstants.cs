@@ -8,5 +8,6 @@ namespace Rocky
     public static class webConstants
     {
         public static string ImagePath = @"\images\product\";
+        public static string SessionCart = "ShoppingCartSession";
     }
 }
